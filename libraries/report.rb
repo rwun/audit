@@ -11,7 +11,6 @@ class ComplianceReport < Chef::Resource
   property :server, [String, URI, nil]
   property :port, Integer
   property :token, [String, nil]
-  property :refresh_token, [String, nil]
   property :insecure, [TrueClass, FalseClass], default: false
   property :quiet, [TrueClass, FalseClass], default: true
   property :collector, ['chef-visibility', 'chef-compliance', 'chef-server'], default: 'chef-server'
@@ -45,7 +44,6 @@ class ComplianceReport < Chef::Resource
       when 'chef-visibility'
         Collector::ChefVisibility.new(entity_uuid, run_id, blob).send_report
       when 'chef-compliance'
-        access_token = retrieve_access_token(server, refresh_token, insecure) unless refresh_token.nil?
         if access_token && server
           url = construct_url(server, ::File.join('/owners', o, 'inspec'))
           Collector::ChefCompliance.new(url, blob, token, raise_if_unreachable).send_report

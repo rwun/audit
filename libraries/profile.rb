@@ -17,7 +17,6 @@ class ComplianceProfile < Chef::Resource
   property :server, [String, URI, nil]
   property :port, Integer
   property :token, [String, nil]
-  property :refresh_token, [String, nil]
   property :insecure, [TrueClass, FalseClass], default: false
   property :inspec_version, String, default: 'latest'
   property :formatter, ['json', 'json-min'], default: 'json-min'
@@ -31,13 +30,7 @@ class ComplianceProfile < Chef::Resource
   default_action :execute
 
   action :fetch do
-    converge_by 'install/update inspec' do
-      chef_gem 'inspec' do
-        version inspec_version if inspec_version != 'latest'
-        compile_time true
-        action :install
-      end
-
+    converge_by 'load required inspec modules' do
       require 'inspec'
       # load the supermarket plugin
       require 'bundles/inspec-supermarket/api'
@@ -46,8 +39,6 @@ class ComplianceProfile < Chef::Resource
       # load the compliance api plugin
       require 'bundles/inspec-compliance/api'
       require 'bundles/inspec-compliance/http'
-
-      check_inspec
     end
 
     converge_by 'create cache directory' do
@@ -61,10 +52,7 @@ class ComplianceProfile < Chef::Resource
       Chef::Log.info "Fetch compliance profile #{o}/#{p}"
 
       path = tar_path
-
-      # retrieve access token if a refresh token is set
       access_token = token
-      access_token = retrieve_access_token(server, refresh_token, insecure) unless refresh_token.nil?
 
       if access_token # go direct
         reqpath ="owners/#{o}/compliance/#{p}/tar"
@@ -112,14 +100,8 @@ class ComplianceProfile < Chef::Resource
 
   action :execute do
     # ensure it's there, if if the profile wasn't fetched using these resources
-    converge_by 'install/update inspec' do
-      chef_gem 'inspec' do
-        version inspec_version if inspec_version != 'latest'
-        compile_time true
-      end
-
+    converge_by 'load required inspec modules' do
       require 'inspec'
-      check_inspec
     end
 
     converge_by 'create/verify cache directory' do
@@ -148,7 +130,7 @@ class ComplianceProfile < Chef::Resource
         runner.run
       # TODO: weird exception, do we need that handling?
       rescue Chef::Exceptions::ValidationFailed => e
-        log "INSPEC #{e}"
+        Chef::Log.error e
       end
 
       file report_file do
@@ -156,15 +138,6 @@ class ComplianceProfile < Chef::Resource
         sensitive true
         backup false
       end
-    end
-  end
-
-  def check_inspec
-    if Inspec::VERSION != inspec_version && inspec_version !='latest'
-      Chef::Log.warn "Wrong version of inspec (#{Inspec::VERSION}), please "\
-        'remove old versions (/opt/chef/embedded/bin/gem uninstall inspec).'
-    else
-      Chef::Log.warn "Using inspec version: (#{Inspec::VERSION})"
     end
   end
 
